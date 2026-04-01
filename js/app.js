@@ -164,9 +164,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ExportWord.generate(`${template}_${id}`);
     });
 
-    btnCopyLink.addEventListener('click', () => {
-        Utils.copyToClipboard(window.location.href);
-    });
+
+
 
     btnLogin.addEventListener('click', () => {
         const u = loginUsernameInput.value.trim();
