@@ -86,56 +86,124 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Gọi API và render HTML
-    async function loadData(id, template) {
-        // Tối ưu: Nếu đã có dữ liệu của chính ID này rồi, chỉ cần render lại template
-        if (currentData && currentId === id) {
-            await renderTemplate(template);
-            return;
-        }
+   async function loadData(id, template) {
+    const startedAt = performance.now();
 
-        Utils.hideStatus();
-        documentContent.innerHTML = 'Đang tải dữ liệu...';
-        dataPreview.textContent = 'Đang gọi API...';
+    // Nếu đã có dữ liệu thì chỉ dựng lại biểu mẫu
+    if (currentData && currentId === id) {
+        Utils.showStatus('Đang dựng biểu mẫu...', 'loading');
 
-        try {
-            const auth = checkAuth();
+        await renderTemplate(template);
 
-            // Lấy data từ Apps Script
-            const response = await API.fetchData(id, template, auth.user, auth.pass);
+        const elapsedSeconds =
+            ((performance.now() - startedAt) / 1000).toFixed(1);
 
-            if (!response.success) {
-                if (response.auth_failed) {
-                    sessionStorage.removeItem('auth_user');
-                    sessionStorage.removeItem('auth_pass');
-                    showLogin(response.message);
-                    return;
-                }
+        Utils.showStatus(
+            `Đã dựng biểu mẫu trong ${elapsedSeconds} giây`,
+            'success'
+        );
 
-                Utils.showStatus(response.message || 'Lỗi API không xác định', 'error');
-                dataPreview.textContent = JSON.stringify(response, null, 2);
-                documentContent.innerHTML = 'Lỗi lấy dữ liệu từ hệ thống.';
+        setTimeout(Utils.hideStatus, 4000);
+        return;
+    }
+
+    Utils.showStatus(
+        'Đang lấy dữ liệu và dựng biểu mẫu...',
+        'loading'
+    );
+
+    documentContent.innerHTML = 'Đang tải dữ liệu...';
+    dataPreview.textContent = 'Đang gọi API...';
+
+    try {
+        const auth = checkAuth();
+
+        const response = await API.fetchData(
+            id,
+            template,
+            auth.user,
+            auth.pass
+        );
+
+        if (!response.success) {
+            if (response.auth_failed) {
+                sessionStorage.removeItem('auth_user');
+                sessionStorage.removeItem('auth_pass');
+                showLogin(response.message);
                 return;
             }
 
-            if (response.warnings && response.warnings.length > 0) {
-                Utils.showStatus('Cảnh báo: ' + response.warnings.join(' ; '), 'warning');
-            } else {
-                Utils.showStatus('Tải dữ liệu thành công!', 'success');
-                setTimeout(Utils.hideStatus, 3000);
-            }
+            Utils.showStatus(
+                response.message || 'Lỗi API không xác định',
+                'error'
+            );
 
-            currentData = response.data;
-            currentId = id;
-            dataPreview.textContent = JSON.stringify(response.data, null, 2);
+            dataPreview.textContent =
+                JSON.stringify(response, null, 2);
 
-            // Lấy giao diện template và Render
-            await renderTemplate(template);
+            documentContent.innerHTML =
+                'Lỗi lấy dữ liệu từ hệ thống.';
 
-        } catch (error) {
-            Utils.showStatus(error.message, 'error');
-            documentContent.innerHTML = 'Hệ thống gọi API thất bại: ' + error.message;
+            return;
         }
+
+        currentData = response.data;
+        currentId = id;
+
+        dataPreview.textContent =
+            JSON.stringify(response.data, null, 2);
+
+        // Dựng file Word
+        await renderTemplate(template);
+
+        const elapsedMilliseconds =
+            performance.now() - startedAt;
+
+        const elapsedSeconds =
+            (elapsedMilliseconds / 1000).toFixed(1);
+
+        // Ghi thông tin chi tiết trong Console
+        console.info('Thời gian tải:', {
+            tongThoiGianMs: Math.round(elapsedMilliseconds),
+            appsScriptMs: response.processingMs || null,
+            renderWordMs: response.processingMs
+                ? Math.max(
+                    0,
+                    Math.round(
+                        elapsedMilliseconds - response.processingMs
+                    )
+                )
+                : null
+        });
+
+        if (response.warnings?.length > 0) {
+            Utils.showStatus(
+                `Đã tải trong ${elapsedSeconds} giây. Cảnh báo: ` +
+                response.warnings.join(' ; '),
+                'warning'
+            );
+        } else {
+            Utils.showStatus(
+                `Đã tải xong trong ${elapsedSeconds} giây`,
+                'success'
+            );
+
+            setTimeout(Utils.hideStatus, 4000);
+        }
+
+    } catch (error) {
+        const elapsedSeconds =
+            ((performance.now() - startedAt) / 1000).toFixed(1);
+
+        Utils.showStatus(
+            `Tải thất bại sau ${elapsedSeconds} giây: ${error.message}`,
+            'error'
+        );
+
+        documentContent.innerHTML =
+            'Hệ thống gọi API thất bại: ' + error.message;
     }
+}
 
     // Lắng nghe sự kiện
     btnReload.addEventListener('click', () => {
